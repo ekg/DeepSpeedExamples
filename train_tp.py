@@ -41,9 +41,14 @@ def main():
         model=model,
         optimizer=optimizer,
         config_params={
-            "train_batch_size": 1,
+            "train_micro_batch_size_per_gpu": 1,
             "gradient_accumulation_steps": 1,
-            "tensor_parallel": {"tp_size": args.tp_size}
+            "tensor_parallel": {
+                "tp": {
+                    "tp_size": args.tp_size,
+                    "tp_grain_size": 64
+                }
+            }
         }
     )
 

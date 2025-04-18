@@ -1,8 +1,11 @@
 {
-  "train_batch_size": 1,
+  "train_micro_batch_size_per_gpu": 1,
   "gradient_accumulation_steps": 1,
   "tensor_parallel": {
-    "tp_size": 4
+    "tp": {
+      "tp_size": 4,
+      "tp_grain_size": 64
+    }
   },
   "optimizer": {
     "type": "AdamW",
