@@ -6,11 +6,16 @@ import argparse
 from schedulefree import AdamWScheduleFree
 
 def get_model():
-    return nn.Sequential(
+    model = nn.Sequential(
         nn.Linear(128, 256),
         nn.ReLU(),
         nn.Linear(256, 10)
     )
+    # Use torch.compile to accelerate the model
+    if hasattr(torch, 'compile') and callable(torch.compile):
+        model = torch.compile(model)
+        print("Model compiled with torch.compile")
+    return model
 
 def get_args():
     parser = argparse.ArgumentParser(

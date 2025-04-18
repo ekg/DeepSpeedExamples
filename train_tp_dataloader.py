@@ -47,6 +47,11 @@ def main():
 
     # 2) Build DeepSpeed engine
     model = nn.Sequential(nn.Linear(128, 256), nn.ReLU(), nn.Linear(256, 10))
+    # Use torch.compile to accelerate the model
+    if hasattr(torch, 'compile') and callable(torch.compile):
+        model = torch.compile(model)
+        if model_engine.global_rank == 0:
+            print("Model compiled with torch.compile")
     optimizer = AdamW(model.parameters(), lr=1e-3, weight_decay=0.01)
     ds_config = {
         "train_micro_batch_size_per_gpu": 4,
@@ -79,6 +84,8 @@ def main():
     )
 
     # 5) Training loop
+    # Wait for compilation to complete on all ranks
+    torch.distributed.barrier()
     start_time = time.time()
     for step in range(args.train_steps):
         epoch = step // len(data_loader)
