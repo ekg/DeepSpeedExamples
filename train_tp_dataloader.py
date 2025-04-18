@@ -4,6 +4,7 @@ from torch.optim import AdamW
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import deepspeed
+import time
 
 # 1) Deterministic seeding
 SEED = 42
@@ -33,10 +34,16 @@ def get_args():
                         help='local rank passed from distributed launcher')
     parser.add_argument('--train_steps', type=int, default=100)
     parser.add_argument('--tp_size',     type=int, default=1)
+    parser.add_argument('--port', type=int, default=29500,
+                        help='port for distributed communication')
     return parser.parse_args()
 
 def main():
     args = get_args()
+    
+    # Set custom port for distributed communication
+    if args.port != 29500:
+        os.environ['MASTER_PORT'] = str(args.port)
 
     # 2) Build DeepSpeed engine
     model = nn.Sequential(nn.Linear(128, 256), nn.ReLU(), nn.Linear(256, 10))
@@ -72,6 +79,7 @@ def main():
     )
 
     # 5) Training loop
+    start_time = time.time()
     for step in range(args.train_steps):
         epoch = step // len(data_loader)
         sampler.set_epoch(epoch)  # Ensures deterministic shuffling per epoch
@@ -85,7 +93,8 @@ def main():
             model_engine.step()
 
             if model_engine.global_rank == 0 and batch_idx == 0:
-                print(f"[Step {step:03d}] Loss: {loss.item():.4f}")
+                elapsed = time.time() - start_time
+                print(f"[Step {step:03d}] Loss: {loss.item():.4f}, Time: {elapsed:.2f}s")
             
             # Break after one batch per step for this example
             break

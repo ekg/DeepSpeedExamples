@@ -24,11 +24,17 @@ def get_args():
                         help='tensor parallel size')
     parser.add_argument('--train_steps', type=int, default=10,
                         help='number of training steps')
+    parser.add_argument('--port', type=int, default=29500,
+                        help='port for distributed communication')
     return parser.parse_args()
 
 def main():
     args = get_args()
-
+    
+    # Set custom port for distributed communication
+    if args.port != 29500:
+        os.environ['MASTER_PORT'] = str(args.port)
+    
     # Instantiate model
     model = get_model()
     
