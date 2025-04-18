@@ -55,7 +55,7 @@ def main():
     dataset = RandomDataset(length=10000, in_dim=128, out_dim=10)
     sampler = DistributedSampler(
         dataset,
-        num_replicas=model_engine.world_size(),
+        num_replicas=model_engine.world_size,
         rank=model_engine.global_rank,
         shuffle=True,
         seed=SEED
