@@ -50,8 +50,7 @@ def main():
     # Use torch.compile to accelerate the model
     if hasattr(torch, 'compile') and callable(torch.compile):
         model = torch.compile(model)
-        if model_engine.global_rank == 0:
-            print("Model compiled with torch.compile")
+        print("Model compiled with torch.compile")
     optimizer = AdamW(model.parameters(), lr=1e-3, weight_decay=0.01)
     ds_config = {
         "train_micro_batch_size_per_gpu": 4,
@@ -62,6 +61,10 @@ def main():
         args=args, model=model, optimizer=optimizer,
         config_params=ds_config
     )
+    
+    # Print compilation status from the correct rank
+    if hasattr(torch, 'compile') and callable(torch.compile) and model_engine.global_rank == 0:
+        print(f"[Rank {model_engine.global_rank}] Model compiled with torch.compile")
 
     # 3) Prepare Dataset & Sampler
     dataset = RandomDataset(length=10000, in_dim=128, out_dim=10)
