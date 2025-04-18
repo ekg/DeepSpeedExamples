@@ -1,21 +1,19 @@
-import os
 import torch
 import torch.nn as nn
-from torch.optim import AdamW
 import deepspeed
 import argparse
+from schedulefree import AdamWScheduleFree
 
-class SimpleModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.linear = nn.Linear(8, 8)
-
-    def forward(self, x):
-        return self.linear(x)
+def get_model():
+    return nn.Sequential(
+        nn.Linear(128, 256),
+        nn.ReLU(),
+        nn.Linear(256, 10)
+    )
 
 def get_args():
     parser = argparse.ArgumentParser(
-        description='DeepSpeed TP training script'
+        description='DeepSpeed TP + ScheduleFree AdamW'
     )
     # Allow DeepSpeed's launcher to set the local rank
     parser.add_argument('--local_rank', type=int, default=-1,
@@ -31,47 +29,63 @@ def get_args():
 def main():
     args = get_args()
 
-    # Instantiate model and move parameters under DeepSpeed control
-    model = SimpleModel()
-    optimizer = AdamW(model.parameters(), lr=1e-3, weight_decay=0.01)
+    # Instantiate model
+    model = get_model()
+    
+    # 1) Instantiate Schedule‑Free AdamW (no external scheduler needed)
+    base_opt = AdamWScheduleFree(
+        model.parameters(),
+        lr=1e-3,
+        weight_decay=0.01,
+        warmup_steps=0
+    )
 
-    # DeepSpeed initialization: returns engine wrapping model & optimizer
+    # 2) DeepSpeed config for tensor parallelism
+    ds_config = {
+        "train_micro_batch_size_per_gpu": 4,
+        "gradient_accumulation_steps": 1,
+        "tensor_parallel": {
+            "tp": {
+                "tp_size": args.tp_size,
+                "tp_grain_size": 64
+            }
+        }
+    }
+
+    # 3) Initialize DeepSpeed engine with our Schedule‑Free optimizer
     model_engine, optimizer, _, _ = deepspeed.initialize(
         args=args,
         model=model,
-        optimizer=optimizer,
-        config_params={
-            "train_micro_batch_size_per_gpu": 1,
-            "gradient_accumulation_steps": 1,
-            "tensor_parallel": {
-                "tp": {
-                    "tp_size": args.tp_size,
-                    "tp_grain_size": 64
-                }
-            }
-        }
+        optimizer=base_opt,
+        config_params=ds_config
     )
 
-    # Training loop over random data
+    # 4) Put optimizer into train mode (required by Schedule‑Free)
+    model_engine.optimizer.train()
+
+    # 5) Training loop
     for step in range(args.train_steps):
         # Create dummy input and target
-        x = torch.randn(1, 8).to(model_engine.device)
-        target = torch.randn(1, 8).to(model_engine.device)
+        x = torch.randn(4, 128, device=model_engine.device)
+        y = torch.randint(0, 10, (4,), device=model_engine.device)
 
         # Forward pass
-        output = model_engine(x)
-
-        # Compute simple MSE loss
-        loss = nn.functional.mse_loss(output, target)
+        logits = model_engine(x)
+        
+        # Compute loss
+        loss = nn.functional.cross_entropy(logits, y)
 
         # Backward pass (handles gradient accumulation, communication, etc.)
         model_engine.backward(loss)
 
-        # Optimizer step (updates weights, zeroes grads, updates LR scheduler)
+        # Optimizer step (updates weights, zeroes grads)
         model_engine.step()
 
         if model_engine.local_rank == 0:
-            print(f"[Step {step:2d}] loss = {loss.item():.6f}")
+            print(f"[Step {step:03d}] Loss = {loss.item():.4f}")
+    
+    # 6) Switch to eval mode before validation or checkpoint
+    model_engine.optimizer.eval()
 
 if __name__ == "__main__":
     main()
