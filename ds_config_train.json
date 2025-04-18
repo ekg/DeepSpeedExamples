@@ -1,0 +1,14 @@
+{
+  "train_batch_size": 1,
+  "gradient_accumulation_steps": 1,
+  "tensor_parallel": {
+    "tp_size": 4
+  },
+  "optimizer": {
+    "type": "AdamW",
+    "params": {
+      "lr": 0.001,
+      "weight_decay": 0.01
+    }
+  }
+}
