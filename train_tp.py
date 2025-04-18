@@ -7,20 +7,25 @@ import argparse
 
 class SimpleModel(nn.Module):
     def __init__(self):
-        super(SimpleModel, self).__init__()
-        # A single linear layer
+        super().__init__()
         self.linear = nn.Linear(8, 8)
 
     def forward(self, x):
         return self.linear(x)
 
 def get_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description='DeepSpeed TP training script'
+    )
+    # Allow DeepSpeed's launcher to set the local rank
+    parser.add_argument('--local_rank', type=int, default=-1,
+                        help='local rank passed from distributed launcher')
+    # Add DeepSpeed's built‑in arguments (e.g., --deepspeed_config)
     parser = deepspeed.add_config_arguments(parser)
     parser.add_argument('--tp_size', type=int, default=1,
-                        help='Tensor parallel size')
+                        help='tensor parallel size')
     parser.add_argument('--train_steps', type=int, default=10,
-                        help='Number of training steps')
+                        help='number of training steps')
     return parser.parse_args()
 
 def main():
